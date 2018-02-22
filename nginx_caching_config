@@ -1,0 +1,109 @@
+#odoo server
+upstream odoo {
+ server 127.0.0.1:8079;
+}
+upstream odoochat {
+ server 127.0.0.1:8080;
+}
+
+proxy_cache_path /tmp/nginx_cache/webcontentcache levels=1:2 keys_zone=web_content_cache:10m max_size=10g
+                  inactive=60m use_temp_path=off;
+
+proxy_cache_path /tmp/nginx_cache/tag levels=1:2 keys_zone=tag:10m inactive=1d max_size=10g;
+
+# https://lincolnloop.com/blog/tracking-application-response-time-nginx/
+log_format timed_combined_log '$http_x_forwarded_for - $remote_user [$time_local] - $upstream_cache_status '
+    '"$request" $status $body_bytes_sent '
+    '"$http_referer" "$http_user_agent" '
+    '$request_time $upstream_response_time $pipe';
+
+server {
+   listen 80;
+   server_name 127.0.0.1;
+   #rewrite ^(.*) https://$host$1 permanent;
+
+ proxy_read_timeout 720s;
+ proxy_connect_timeout 720s;
+ proxy_send_timeout 720s;
+ # Add Headers for odoo proxy mode
+ proxy_set_header X-Forwarded-Host $host;
+ proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+ proxy_set_header X-Forwarded-Proto $scheme;
+ proxy_set_header X-Real-IP $remote_addr;
+# log
+ access_log /var/log/nginx/odoo.access.log timed_combined_log;
+ error_log /var/log/nginx/odoo.error.log;
+
+ # Redirect requests to odoo backend server
+ location / {
+   #proxy_redirect off;
+   proxy_pass http://odoo;
+   #proxy_cache web_content_cache;
+   #add_header X-Cached $upstream_cache_status;
+   proxy_cache tag;
+   proxy_cache_key "$request_uri|$request_body";
+   proxy_cache_valid 200 1d;
+   proxy_cache_methods POST;
+   add_header X-Cache-Status $upstream_cache_status;
+ }
+
+ location /longpolling {
+     proxy_pass http://odoochat;
+ }
+ #location /website_service_planner/static/src/img {
+ location /website/static {
+ # -- location ~* /web/content/.*css$ {
+ # -- location /web/content/* {
+     proxy_cache_bypass $http_secret_header;
+     proxy_cache web_content_cache;
+     proxy_pass http://odoo;
+     add_header X-Cached $upstream_cache_status;
+ }
+
+ location /web/static {
+ # -- location ~* /web/content/.*css$ {
+ # -- location /web/content/* {
+     proxy_cache_bypass $http_secret_header;
+     proxy_cache web_content_cache;
+     proxy_pass http://odoo;
+     add_header X-Cached $upstream_cache_status;
+ }
+
+ location /web/content {
+ # -- location ~* /web/content/.*css$ {
+ # -- location /web/content/* {
+     proxy_cache_bypass $http_secret_header;
+     proxy_cache web_content_cache;
+     proxy_pass http://odoo;
+     add_header X-Cached $upstream_cache_status;
+ }
+# location /wms/static {
+#     proxy_cache_bypass $http_secret_header;
+#     proxy_cache web_content_cache;
+#     proxy_pass http://odoo;
+#     add_header X-Cached $upstream_cache_status;
+# }
+
+ location /service_planner/website_service_planner/static {
+     proxy_cache_bypass $http_secret_header;
+     proxy_cache web_content_cache;
+     proxy_pass http://odoo;
+     add_header X-Cached $upstream_cache_status;
+ }
+
+ location ~ \.(css|js)$ {
+     proxy_cache_bypass $http_secret_header;
+     proxy_cache web_content_cache;
+     proxy_pass http://odoo;
+     add_header X-Cached $upstream_cache_status;
+ }
+# location /web_planner/static/ {
+#     proxy_cache_bypass $http_secret_header;
+#     proxy_cache web_content_cache;
+#     proxy_pass http://odoo;
+#     add_header X-Cached $upstream_cache_status;
+# }
+ gzip_types text/css text/less text/plain text/xml application/xml application/json application/javascript;
+ gzip on;
+
+}
